@@ -79,7 +79,12 @@ function initializeAssetImporter() {
         importBtn.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (event) => {
             for (const file of event.target.files) {
-                 if (file.type.startsWith('image/')) {
+                const extension = file.name.split('.').pop().toLowerCase();
+                const aimeExtensions = ['persona', 'world', 'setting', 'scene', 'species', 'philosophy', 'technology'];
+
+                if (aimeExtensions.includes(extension)) {
+                    addAimeAssetToList(file, assetList);
+                } else if (file.type.startsWith('image/')) {
                     addImageAssetToList(file, assetList);
                 } else {
                     addTextAssetToList(file, assetList);
@@ -89,38 +94,75 @@ function initializeAssetImporter() {
     }
 }
 
+function addAimeAssetToList(file, assetList) {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const data = JSON.parse(event.target.result);
+            const assetItem = document.createElement('div');
+            assetItem.className = 'asset-item aime-asset';
+            assetItem.dataset.assetData = JSON.stringify({ assetType: data.assetType, traits: data.traits });
+
+            const assetType = data.assetType || 'AIME';
+            const assetName = data.traits.name || file.name;
+
+            assetItem.innerHTML = getAssetHTML(assetName, assetType.slice(0, 4), 'aime-asset');
+            assetList.appendChild(assetItem);
+            assetItem.querySelector('.remove-asset-btn').addEventListener('click', () => assetItem.remove());
+
+        } catch (error) {
+            console.error(`Could not parse AIME asset file: ${file.name}`, error);
+            addTextAssetToList(file, assetList);
+        }
+    };
+    reader.onerror = () => {
+        console.error(`Could not read file: ${file.name}`);
+        addTextAssetToList(file, assetList);
+    };
+    reader.readAsText(file);
+}
+
 function addTextAssetToList(file, assetList) {
     const assetItem = document.createElement('div');
-    assetItem.className = 'asset-item';
-    assetItem.innerHTML = `
-        <div class="asset-info">
-            <span class="asset-icon-text">TXT</span>
-            <span class="asset-name">${file.name}</span>
-        </div>
-        <button class="remove-asset-btn">&times;</button>
-    `;
+    assetItem.className = 'asset-item text-asset';
+    assetItem.innerHTML = getAssetHTML(file.name, 'TXT', 'text-asset');
     assetList.appendChild(assetItem);
     assetItem.querySelector('.remove-asset-btn').addEventListener('click', () => assetItem.remove());
 }
 
 function addImageAssetToList(file, assetList) {
     const assetItem = document.createElement('div');
-    assetItem.className = 'asset-item';
+    assetItem.className = 'asset-item image-asset';
     const imageURL = URL.createObjectURL(file);
-
-    assetItem.innerHTML = `
-        <div class="asset-info">
-            <img src="${imageURL}" class="asset-thumbnail" alt="${file.name}">
-            <span class="asset-name">${file.name}</span>
-        </div>
-        <button class="remove-asset-btn">&times;</button>
-    `;
+    assetItem.innerHTML = getAssetHTML(file.name, `<img src="${imageURL}" class="asset-thumbnail" alt="${file.name}">`, 'image-asset');
     assetList.appendChild(assetItem);
     assetItem.querySelector('.remove-asset-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         assetItem.remove();
         URL.revokeObjectURL(imageURL);
     });
+}
+
+function getAssetHTML(name, iconHTML, typeClass) {
+    const iconSpan = typeClass === 'image-asset' ? iconHTML : `<span class="${typeClass === 'aime-asset' ? 'asset-icon-aime' : 'asset-icon-text'}">${iconHTML}</span>`;
+    return `
+        <div class="asset-main-info">
+            <div class="asset-info">
+                ${iconSpan}
+                <span class="asset-name">${name}</span>
+            </div>
+            <button class="remove-asset-btn">&times;</button>
+        </div>
+        <div class="asset-controls">
+            <select class="asset-importance-selector">
+                <option value="Typical">Typical Importance</option>
+                <option value="High">High Importance</option>
+                <option value="Low">Low Importance</option>
+                <option value="Non-Informative">Non-Informative</option>
+            </select>
+            <input type="text" class="asset-annotation-input" placeholder="Add a directorial note...">
+        </div>
+    `;
 }
 
 
@@ -130,9 +172,12 @@ function initializeGuidanceGems() {
     if (!container) return;
 
     const gemsData = {
-        "Tone": ["Epic", "Gritty", "Mystical", "Hopeful", "Dystopian"],
-        "Scope": ["Personal", "Planetary", "Galactic", "Cosmic"],
-        "Core Theme": ["Conflict", "Exploration", "Mystery", "Survival", "Intrigue"]
+        "Genre": ["Action", "Adventure", "Comedy", "Drama", "Fantasy", "Sci-Fi", "Horror", "Mystery", "Romance", "Thriller"],
+        "Tone": ["Serious", "Humorous", "Formal", "Informal", "Optimistic", "Pessimistic", "Joyful", "Sad", "Hopeful", "Cynical"],
+        "Pacing": ["Fast-paced", "Slow-burn", "Steady", "Urgent", "Relaxed", "Meditative"],
+        "Point of View": ["First Person", "Third Person Limited", "Third Person Omniscient", "Second Person"],
+        "Literary Devices": ["Metaphor", "Simile", "Personification", "Alliteration", "Symbolism", "Irony", "Foreshadowing"],
+        "Structure": ["Linear", "Non-linear", "Episodic", "In Medias Res", "Frame Story"]
     };
 
     let html = '';
@@ -202,38 +247,120 @@ async function generateElementContent(button) {
 }
 
 function craftSuperPrompt(elementType) {
-    let prompt = `You are AIME, an AI world-building assistant. The user wants to generate details for a "${elementType}" Element. Use the provided information to create a rich, detailed, and creative description.\n\n--- ELEMENT DETAILS ---\n`;
-    
+    let prompt = `You are AIME, an AI world-building assistant. The user wants to generate details for a "${elementType}" Element. Use the provided information to create a rich, detailed, and creative description.\n\n`;
+
+    // --- 1. Current Element's Traits ---
+    prompt += "--- PRIMARY ELEMENT: " + elementType + " ---\n";
     const inputs = document.querySelectorAll('.form-section .input-field');
+    let hasPrimaryTraits = false;
     inputs.forEach(input => {
         const label = input.previousElementSibling ? input.previousElementSibling.textContent : input.id;
         if (input.value.trim()) {
             prompt += `${label}: ${input.value.trim()}\n`;
+            hasPrimaryTraits = true;
         }
     });
+    if (!hasPrimaryTraits) {
+        prompt += "No specific traits provided for this element. Please generate creatively.\n";
+    }
 
+    // --- 2. Guidance Gems ---
     const activeGems = document.querySelectorAll('#guidance-gems-container .gem-option.active');
     if (activeGems.length > 0) {
-        prompt += "\n--- GUIDANCE GEMS ---\n";
+        prompt += "\n--- GUIDANCE GEMS (STYLISTIC DIRECTION) ---\n";
         activeGems.forEach(gem => prompt += `- ${gem.textContent.trim()}\n`);
     }
 
-    const assetItems = document.querySelectorAll('#asset-list .asset-name');
+    // --- 3. Contextual Assets with Importance and Annotations ---
+    const assetItems = document.querySelectorAll('#asset-list .asset-item');
     if (assetItems.length > 0) {
-        prompt += "\n--- CONTEXTUAL ASSETS ---\n";
-        assetItems.forEach(item => prompt += `- ${item.textContent.trim()}\n`);
+        prompt += "\n--- CONTEXTUAL ASSETS (REFERENCE LORE) ---\n";
+        assetItems.forEach(item => {
+            const importance = item.querySelector('.asset-importance-selector')?.value || 'Typical';
+            const annotation = item.querySelector('.asset-annotation-input')?.value.trim() || '';
+
+            if (importance === 'Non-Informative') return; // Skip this asset entirely
+
+            let assetEntry = '';
+            if (item.classList.contains('aime-asset') && item.dataset.assetData) {
+                try {
+                    const data = JSON.parse(item.dataset.assetData);
+                    assetEntry += `\n[Reference Asset: ${data.assetType} | Importance: ${importance}]\n`;
+                    if (annotation) assetEntry += `  - Director's Note: ${annotation}\n`;
+                    for (const [key, value] of Object.entries(data.traits)) {
+                        assetEntry += `  - ${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}\n`;
+                    }
+                } catch (e) {
+                    const assetName = item.querySelector('.asset-name')?.textContent || 'Unnamed Asset';
+                    assetEntry += `\n[Reference Asset: Plain Text | Importance: ${importance}]\n- Filename: ${assetName}\n`;
+                    if (annotation) assetEntry += `  - Director's Note: ${annotation}\n`;
+                }
+            } else {
+                const assetName = item.querySelector('.asset-name')?.textContent || 'Unnamed Asset';
+                const assetType = item.classList.contains('image-asset') ? 'Image' : 'Generic';
+                assetEntry += `\n[Reference Asset: ${assetType} | Importance: ${importance}]\n- Filename: ${assetName}\n`;
+                if (annotation) assetEntry += `  - Director's Note: ${annotation}\n`;
+            }
+            prompt += assetEntry;
+        });
     }
 
-    prompt += `\n--- TASK ---\nGenerate the content for the "${elementType}" Element based on the data above. Be descriptive and imaginative. Format the output clearly with headings.`;
+    prompt += `\n--- TASK ---\nGenerate the content for the primary "${elementType}" Element. Use the Guidance Gems for style. Critically, use the Contextual Assets for lore, background, and specific direction, paying close attention to their specified Importance and Director's Notes. Be descriptive, imaginative, and ensure the output is consistent with all provided data. Format the output clearly with headings.`;
     
     console.log("Super Prompt:", prompt);
     return prompt;
 }
 
+// --- Asset Saving Logic ---
+function saveElementAsset() {
+    const generateButton = document.getElementById('generate-button');
+    if (!generateButton) {
+        console.error('Generate button not found, cannot determine element type.');
+        return;
+    }
+    const elementType = generateButton.dataset.elementType; // e.g., PERSONA
+    const extension = elementType.toLowerCase(); // e.g., persona
+
+    const assetData = {
+        assetType: elementType,
+        timestamp: new Date().toISOString(),
+        traits: {}
+    };
+
+    const inputs = document.querySelectorAll('.form-section .input-field');
+    inputs.forEach(input => {
+        const fieldId = input.dataset.fieldId;
+        if (fieldId && input.value.trim() !== '') {
+            assetData.traits[fieldId] = input.value.trim();
+        }
+    });
+
+    // Use the 'name' field for the filename, otherwise default to 'Untitled'
+    const assetName = assetData.traits.name || 'Untitled';
+    const filename = `${assetName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${extension}`;
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(assetData, null, 2));
+
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", filename);
+    document.body.appendChild(downloadAnchorNode); // Required for Firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
+
 function initializeGeneration() {
     const generateButton = document.getElementById('generate-button');
     if (generateButton) {
         generateButton.addEventListener('click', () => generateElementContent(generateButton));
+    }
+}
+
+function initializeSaveButton() {
+    const saveButton = document.getElementById('save-asset-button');
+    if (saveButton) {
+        saveButton.addEventListener('click', saveElementAsset);
     }
 }
 
@@ -256,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeGuidanceGems();
     initializeAssetImporter();
     initializeGeneration();
+    initializeSaveButton();
     initializeClearButton();
 });
 
