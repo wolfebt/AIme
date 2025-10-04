@@ -145,7 +145,6 @@ Please provide a helpful and context-aware response.
 @app.route('/api/image', methods=['POST', 'OPTIONS'])
 def image():
     if request.method == 'OPTIONS':
-        # Handle preflight request
         return '', 200
 
     data = request.get_json()
@@ -153,20 +152,70 @@ def image():
     gems = data.get('gems', [])
     assets = data.get('assets', [])
 
-    # For now, we'll just log the received data and return a placeholder.
-    print("Received Image Generation Request:")
-    print(f"  Prompt: {prompt}")
-    print(f"  Gems: {gems}")
-    print(f"  Assets: {len(assets)} assets loaded")
+    # --- Superprompt Crafting ---
+    superprompt = prompt
+    if gems:
+        superprompt += ", " + ", ".join(gems)
+    asset_info = [asset.get('fileName', 'unnamed asset') for asset in assets]
+    if asset_info:
+        superprompt += ", featuring elements from: " + ", ".join(asset_info)
+    superprompt = ", ".join(filter(None, [s.strip() for s in superprompt.split(',')]))
 
-    # In a real implementation, you would use this data to call an image generation model.
-    # For this example, we'll return a static placeholder image.
-    placeholder_url = f"https://placehold.co/1024x1024/0d1117/e6edf3?text=AIME+Placeholder"
+    print(f"Crafted Superprompt for ImageGen: {superprompt}")
 
-    return jsonify({
-        "imageUrl": placeholder_url,
-        "revisedPrompt": prompt # In a real scenario, the model might return a revised prompt.
-    })
+    # --- API Key Handling ---
+    user_api_key = request.headers.get('X-AIME-API-Key')
+    default_api_key = os.getenv('API_KEY')
+    api_key_to_use = user_api_key or default_api_key
+
+    if not api_key_to_use:
+        return jsonify({"error": "API key is missing or not configured."}), 500
+
+    # --- Image Model API Call ---
+    # This uses a different base URL and payload structure than the text models.
+    # This requires the Vertex AI API to be enabled for the project.
+    project_id = os.getenv('GOOGLE_PROJECT_ID')
+    if not project_id:
+        return jsonify({"error": "GOOGLE_PROJECT_ID is not configured on the server."}), 500
+
+    api_url = f"https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/imagen@006:predict"
+
+    headers = {
+        'Authorization': f'Bearer {api_key_to_use}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        "instances": [{"prompt": superprompt}],
+        "parameters": {"sampleCount": 1}
+    }
+
+    try:
+        response = requests.post(api_url, headers=headers, json=payload)
+        response.raise_for_status()
+        result = response.json()
+
+        base64_image = result.get('predictions', [{}])[0].get('bytesBase64Encoded')
+
+        if not base64_image:
+            raise KeyError("Could not find 'bytesBase64Encoded' in API response.")
+
+        image_url = f"data:image/png;base64,{base64_image}"
+
+        return jsonify({
+            "imageUrl": image_url,
+            "revisedPrompt": superprompt
+        })
+
+    except requests.exceptions.RequestException as e:
+        error_message = f"Failed to connect to AI service: {e}"
+        try:
+            error_details = e.response.json()
+            error_message = error_details.get("error", {}).get("message", error_message)
+        except (ValueError, AttributeError):
+            pass
+        return jsonify({"error": error_message}), getattr(e.response, 'status_code', 500)
+    except (KeyError, IndexError) as e:
+        return jsonify({"error": f"Failed to parse AI response: {e}"}), 500
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
