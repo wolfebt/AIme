@@ -358,7 +358,7 @@ function gatherPageContext() {
 
 async function generateImage() {
     const button = document.getElementById('generate-button');
-    const imageContainer = document.getElementById('image-container');
+    const imageDisplayArea = document.getElementById('image-display-area');
     const imageToolbar = document.getElementById('image-toolbar');
 
     const context = gatherPageContext();
@@ -369,7 +369,7 @@ async function generateImage() {
 
     button.disabled = true;
     button.textContent = 'Generating...';
-    imageContainer.innerHTML = `
+    imageDisplayArea.innerHTML = `
         <div class="loading-indicator">
             <div class="loading-spinner"></div>
             <p class="loading-text">AIME is dreaming up your image...</p>
@@ -393,7 +393,7 @@ async function generateImage() {
         const result = await response.json();
 
         if (result.imageUrl) {
-            imageContainer.innerHTML = `<img src="${result.imageUrl}" alt="${result.revisedPrompt || context.prompt}">`;
+            imageDisplayArea.innerHTML = `<img src="${result.imageUrl}" alt="${result.revisedPrompt || context.prompt}">`;
             imageToolbar.classList.remove('hidden');
         } else {
             throw new Error("API response did not contain an image URL.");
@@ -401,7 +401,7 @@ async function generateImage() {
 
     } catch (error) {
         console.error('Error generating image:', error);
-        imageContainer.innerHTML = `<p class="error-text">Error: ${error.message}</p>`;
+        imageDisplayArea.innerHTML = `<p class="error-text">Error: ${error.message}</p>`;
         showToast(`Error: ${error.message}`, 'error');
     } finally {
         button.disabled = false;
@@ -410,24 +410,21 @@ async function generateImage() {
 }
 
 function saveImage() {
-    const imageContainer = document.getElementById('image-container');
-    const imageElement = imageContainer.querySelector('img');
+    const imageDisplayArea = document.getElementById('image-display-area');
+    const imageElement = imageDisplayArea.querySelector('img');
 
     if (!imageElement || !imageElement.src.startsWith('data:image')) {
         showToast("No generated image to save.", "error");
         return;
     }
 
-    // Create a temporary link to trigger the download
     const link = document.createElement('a');
     link.href = imageElement.src;
 
-    // Create a filename based on the prompt or a timestamp
     const prompt = document.getElementById('main-prompt').value.trim();
     const filename = prompt ? `${prompt.replace(/[^a-z0-9]/gi, '_').slice(0, 50)}.png` : `aime-image-${Date.now()}.png`;
     link.download = filename;
 
-    // Trigger the download
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -446,9 +443,9 @@ function loadImage() {
 
         const reader = new FileReader();
         reader.onload = event => {
-            const imageContainer = document.getElementById('image-container');
+            const imageDisplayArea = document.getElementById('image-display-area');
             const imageToolbar = document.getElementById('image-toolbar');
-            imageContainer.innerHTML = `<img src="${event.target.result}" alt="${file.name}">`;
+            imageDisplayArea.innerHTML = `<img src="${event.target.result}" alt="${file.name}">`;
             imageToolbar.classList.remove('hidden');
             showToast("Image loaded successfully!");
         };
@@ -475,7 +472,7 @@ function initializeGenerationControls() {
             renderAssetList();
             selectedGems = {};
             initializeGuidanceGems();
-            document.getElementById('image-container').innerHTML = '<p class="placeholder-text">Your generated image will appear here.</p>';
+            document.getElementById('image-display-area').innerHTML = '<p class="placeholder-text">Your generated image will appear here.</p>';
             document.getElementById('image-toolbar').classList.add('hidden');
             showToast("Workspace cleared.");
         });
