@@ -3,6 +3,8 @@ import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+import google.auth
+import google.auth.transport.requests
 
 load_dotenv()
 
@@ -163,25 +165,24 @@ def image():
 
     print(f"Crafted Superprompt for ImageGen: {superprompt}")
 
-    # --- API Key Handling ---
-    user_api_key = request.headers.get('X-AIME-API-Key')
-    default_api_key = os.getenv('API_KEY')
-    api_key_to_use = user_api_key or default_api_key
-
-    if not api_key_to_use:
-        return jsonify({"error": "API key is missing or not configured."}), 500
+    # --- Authentication using google-auth ---
+    try:
+        credentials, project_id_from_auth = google.auth.default(scopes=['https://www.googleapis.com/auth/cloud-platform'])
+        auth_req = google.auth.transport.requests.Request()
+        credentials.refresh(auth_req)
+        access_token = credentials.token
+    except google.auth.exceptions.DefaultCredentialsError:
+        return jsonify({"error": "Google Cloud authentication failed. Please configure Application Default Credentials."}), 500
 
     # --- Image Model API Call ---
-    # This uses a different base URL and payload structure than the text models.
-    # This requires the Vertex AI API to be enabled for the project.
-    project_id = os.getenv('GOOGLE_PROJECT_ID')
+    project_id = os.getenv('GOOGLE_PROJECT_ID') or project_id_from_auth
     if not project_id:
-        return jsonify({"error": "GOOGLE_PROJECT_ID is not configured on the server."}), 500
+        return jsonify({"error": "GOOGLE_PROJECT_ID is not configured on the server or found in credentials."}), 500
 
     api_url = f"https://us-central1-aiplatform.googleapis.com/v1/projects/{project_id}/locations/us-central1/publishers/google/models/imagen@006:predict"
 
     headers = {
-        'Authorization': f'Bearer {api_key_to_use}',
+        'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
     payload = {
@@ -193,6 +194,10 @@ def image():
         response = requests.post(api_url, headers=headers, json=payload)
         response.raise_for_status()
         result = response.json()
+
+        # Check for the 'error' key in the response, which Vertex AI sometimes sends on success status codes
+        if 'error' in result:
+             raise requests.exceptions.RequestException(result['error'].get('message', 'Unknown API error'))
 
         base64_image = result.get('predictions', [{}])[0].get('bytesBase64Encoded')
 
@@ -209,11 +214,13 @@ def image():
     except requests.exceptions.RequestException as e:
         error_message = f"Failed to connect to AI service: {e}"
         try:
-            error_details = e.response.json()
-            error_message = error_details.get("error", {}).get("message", error_message)
+            # Attempt to parse a more specific error from the JSON response body
+            error_details = response.json()
+            error_message = error_details.get("error", {}).get("message", str(e))
         except (ValueError, AttributeError):
-            pass
-        return jsonify({"error": error_message}), getattr(e.response, 'status_code', 500)
+            # If parsing fails or response is not set, use the original exception message
+             error_message = str(e)
+        return jsonify({"error": error_message}), getattr(e, 'response', {}).get('status_code', 500)
     except (KeyError, IndexError) as e:
         return jsonify({"error": f"Failed to parse AI response: {e}"}), 500
 

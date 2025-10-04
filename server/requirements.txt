@@ -2,3 +2,4 @@ Flask
 python-dotenv
 requests
 Flask-Cors
+google-auth
