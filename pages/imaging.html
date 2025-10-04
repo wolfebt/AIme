@@ -46,37 +46,33 @@
             </div>
             <div class="resize-handle"></div>
             <div class="side-column">
-                 <div class="accordion glass-panel active">
-                    <button class="accordion-header active">
-                        <span>Generation Controls</span>
-                        <svg class="accordion-chevron" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div class="accordion-content">
-                         <textarea id="main-prompt" class="input-field" placeholder="Describe the image you want to create..."></textarea>
-                         <button id="generate-button" class="generate-btn-large">Generate Image</button>
+                <div class="generation-controls-panel glass-panel">
+                    <h3 class="side-panel-title">Generation Controls</h3>
+                    <div class="generation-controls-content">
+                        <textarea id="main-prompt" class="input-field" placeholder="Describe the image you want to create..."></textarea>
+                        <div class="generation-controls-buttons">
+                             <button id="new-button" class="action-btn">New</button>
+                             <button id="generate-button" data-element-type="IMAGING" class="generate-btn-large">Generate</button>
+                             <button id="load-button" class="action-btn">Load</button>
+                             <button id="save-button" class="save-btn-large">Save Image</button>
+                        </div>
                     </div>
                 </div>
-                <div class="accordion glass-panel active" style="margin-top: 1.5rem;">
-                    <button class="accordion-header active">
-                        <span>Guidance Gems</span>
-                        <svg class="accordion-chevron" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div class="accordion-content">
+                <div class="side-panel-container">
+                    <div class="guidance-gems-panel glass-panel">
+                        <h3 class="side-panel-title">Guidance</h3>
                         <div id="guidance-gems-container"></div>
                     </div>
-                </div>
-                <div class="accordion glass-panel" style="margin-top: 1.5rem;">
-                    <button class="accordion-header">
-                        <span>Asset Hub</span>
-                        <svg class="accordion-chevron" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </button>
-                    <div class="accordion-content asset-hub-container">
-                        <p class="asset-hub-subtitle">Import Element files to guide the visual generation.</p>
-                        <div class="asset-import-area">
-                            <input type="file" id="asset-upload" multiple style="display: none;">
-                            <button id="import-asset-btn" class="import-btn">Import Asset(s)</button>
+                    <div class="asset-hub-panel glass-panel">
+                        <h3 class="side-panel-title">Asset Hub</h3>
+                        <div class="asset-hub-container">
+                            <p class="asset-hub-subtitle">Import assets to guide the generation.</p>
+                            <div class="asset-import-area">
+                                <input type="file" id="asset-upload" multiple style="display: none;">
+                                <button id="import-asset-btn" class="import-btn">Import Asset(s)</button>
+                            </div>
+                            <div id="asset-list" class="asset-list"></div>
                         </div>
-                        <div id="asset-list" class="asset-list"></div>
                     </div>
                 </div>
             </div>

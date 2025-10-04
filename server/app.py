@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-app = Flask(__name__)
+# Serve static files from the project root directory (one level up from /server)
+app = Flask(__name__, static_folder='..', static_url_path='')
 # Apply CORS to all routes, allowing all origins for the /api/ path
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
@@ -141,6 +142,31 @@ Please provide a helpful and context-aware response.
     except (KeyError, IndexError) as e:
         return jsonify({"error": "Failed to parse AI response."}), 500
 
+@app.route('/api/image', methods=['POST', 'OPTIONS'])
+def image():
+    if request.method == 'OPTIONS':
+        # Handle preflight request
+        return '', 200
+
+    data = request.get_json()
+    prompt = data.get('prompt')
+    gems = data.get('gems', [])
+    assets = data.get('assets', [])
+
+    # For now, we'll just log the received data and return a placeholder.
+    print("Received Image Generation Request:")
+    print(f"  Prompt: {prompt}")
+    print(f"  Gems: {gems}")
+    print(f"  Assets: {len(assets)} assets loaded")
+
+    # In a real implementation, you would use this data to call an image generation model.
+    # For this example, we'll return a static placeholder image.
+    placeholder_url = f"https://placehold.co/1024x1024/0d1117/e6edf3?text=AIME+Placeholder"
+
+    return jsonify({
+        "imageUrl": placeholder_url,
+        "revisedPrompt": prompt # In a real scenario, the model might return a revised prompt.
+    })
 
 if __name__ == '__main__':
     app.run(port=5001, debug=True)
