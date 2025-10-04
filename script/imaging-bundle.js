@@ -409,6 +409,55 @@ async function generateImage() {
     }
 }
 
+function saveImage() {
+    const imageContainer = document.getElementById('image-container');
+    const imageElement = imageContainer.querySelector('img');
+
+    if (!imageElement || !imageElement.src.startsWith('data:image')) {
+        showToast("No generated image to save.", "error");
+        return;
+    }
+
+    // Create a temporary link to trigger the download
+    const link = document.createElement('a');
+    link.href = imageElement.src;
+
+    // Create a filename based on the prompt or a timestamp
+    const prompt = document.getElementById('main-prompt').value.trim();
+    const filename = prompt ? `${prompt.replace(/[^a-z0-9]/gi, '_').slice(0, 50)}.png` : `aime-image-${Date.now()}.png`;
+    link.download = filename;
+
+    // Trigger the download
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast("Image saved!");
+}
+
+function loadImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+
+    input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = event => {
+            const imageContainer = document.getElementById('image-container');
+            const imageToolbar = document.getElementById('image-toolbar');
+            imageContainer.innerHTML = `<img src="${event.target.result}" alt="${file.name}">`;
+            imageToolbar.classList.remove('hidden');
+            showToast("Image loaded successfully!");
+        };
+        reader.readAsDataURL(file);
+    }
+
+    input.click();
+}
+
 function initializeGenerationControls() {
     const generateButton = document.getElementById('generate-button');
     const newButton = document.getElementById('new-button');
@@ -427,16 +476,17 @@ function initializeGenerationControls() {
             selectedGems = {};
             initializeGuidanceGems();
             document.getElementById('image-container').innerHTML = '<p class="placeholder-text">Your generated image will appear here.</p>';
+            document.getElementById('image-toolbar').classList.add('hidden');
             showToast("Workspace cleared.");
         });
     }
 
     if (saveButton) {
-        saveButton.addEventListener('click', () => showToast("Save functionality not yet implemented.", "error"));
+        saveButton.addEventListener('click', saveImage);
     }
 
     if (loadButton) {
-        loadButton.addEventListener('click', () => showToast("Load functionality not yet implemented.", "error"));
+        loadButton.addEventListener('click', loadImage);
     }
 }
 
